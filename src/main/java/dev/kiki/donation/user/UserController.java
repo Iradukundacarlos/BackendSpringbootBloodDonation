@@ -3,20 +3,20 @@ package dev.kiki.donation.user;
 import dev.kiki.donation.user.dto.RegisterResponseDto;
 import dev.kiki.donation.user.dto.UpdateDto;
 import dev.kiki.donation.user.dto.UserInfo;
-import dev.kiki.donation.user.dto.UserResponseDto;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/users")
@@ -25,6 +25,7 @@ import java.time.format.DateTimeFormatter;
 @Tag(name = "User Controller")
 public class UserController {
     private final UserService userService;
+    private final UserRepository userRepository;
 
     @GetMapping("/export")
     public ResponseEntity<byte[]> exportUsers() {
@@ -40,14 +41,14 @@ public class UserController {
     }
 
     @GetMapping
-    public ResponseEntity<Page<UserResponseDto>> getAllUsers(
-            @RequestParam(defaultValue = "1", name = "page") int page,
-            @RequestParam(defaultValue = "10", name = "size") int size
-    ) {
-        int realPage = page - 1;
-        Pageable pageable = PageRequest.of(realPage, size);
-
-        return ResponseEntity.ok(userService.findAll(pageable));
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    public ResponseEntity<List<User>> getAllUsers(HttpServletRequest request) {
+        try {
+            List<User> users = userRepository.findAll();
+            return ResponseEntity.ok(users);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
     }
 
     @PutMapping("/{userId}")
@@ -63,21 +64,39 @@ public class UserController {
                 updatedUser.getUsername(),
                 updatedUser.getFirstName(),
                 updatedUser.getLastName(),
-                updatedUser.getRole()
-        );
+                updatedUser.getRole());
         RegisterResponseDto response = new RegisterResponseDto(
                 "User updated successfully",
-                userInfo
-        );
+                userInfo);
         return ResponseEntity.ok(response);
 
     }
 
-    @DeleteMapping("/userId")
+    @DeleteMapping("/{userId}")
     public ResponseEntity<Void> deleteUser(@PathVariable(name = "userId") Long userId) {
         userService.deleteUser(userId);
 
-        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+        return new ResponseEntity<>(HttpStatus.OK);
     }
 
+    @PostMapping("/import")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    public ResponseEntity<String> importUsers(@RequestParam("file") MultipartFile file) {
+        try {
+            if (!file.getContentType().equals("text/csv")) {
+                return ResponseEntity
+                        .badRequest()
+                        .body("Please upload a CSV file");
+            }
+
+            int importedCount = userService.importUsersFromCSV(file);
+            return ResponseEntity.ok(importedCount + " users successfully imported");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Failed to import users: " + e.getMessage());
+        }
+    }
 }

@@ -22,16 +22,21 @@ public class Application {
             PasswordEncoder passwordEncoder
     ) {
         return args -> {
-            User user = new User();
-            user.setFirstName("Derrick");
-            user.setLastName("Nuby");
-            user.setRole(Role.ROLE_ADMIN);
-            user.setEmail("admin@gmail.com");
-            user.setPhoneNumber("+250788530944");
-            user.setUserName("DerrickNuby");
-            user.setPassword(passwordEncoder.encode("admin123@#"));
+            String adminEmail = "admin@gmail.com";
+            
+            // Check if admin user already exists
+            if (userRepository.findByEmail(adminEmail).isEmpty()) {
+                User user = new User();
+                user.setFirstName("Derrick");
+                user.setLastName("Nuby");
+                user.setRole(Role.ROLE_ADMIN);
+                user.setEmail(adminEmail);
+                user.setPhoneNumber("+250788530944");
+                user.setUserName("DerrickNuby");
+                user.setPassword(passwordEncoder.encode("admin123@#"));
 
-            userRepository.save(user);
+                userRepository.save(user);
+            }
         };
     }
 
